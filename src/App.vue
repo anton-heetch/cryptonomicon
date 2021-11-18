@@ -166,6 +166,18 @@
         graph:[]
       }
     },
+    created: {
+
+    },
+    mounted: {
+
+    },
+    updated: {
+
+    },
+    unmounted: {
+
+    },
     methods: {
       add() {
         const newTicker = {
