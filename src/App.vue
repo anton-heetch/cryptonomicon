@@ -108,7 +108,7 @@
                 {{ item.name }} - USD
               </dt>
               <dd class="mt-1 text-3xl font-semibold text-gray-900">
-                {{ item.price }}
+                {{ formatPrice(item.price) }}
               </dd>
             </div>
             <div class="w-full border-t border-gray-200"></div>
@@ -180,6 +180,7 @@
 </template>
 
 <script>
+
 // [x] 6. Наличие в состоянии зависимых данных / 5+
 // [] 5. Обработка ошибок API / 5
 // [] 4. Запросы напрямую внутри компонента / 5
@@ -192,7 +193,9 @@
 
   // [x] График сломан, если везде одинаковые значения
 
-  export default {
+import {subscribeToTicker, unsubscribeFromTicker} from "@/assets/api";
+
+export default {
     name: 'App',
 
     data() {
@@ -228,14 +231,16 @@
 
       if (tickersData) {
         this.tickers = JSON.parse(tickersData)
-
         this.tickers.forEach(ticker => {
-          this.subscribeToUpdates(ticker.name)
+          subscribeToTicker(ticker.name, newPrice =>
+              this.updateTicker(ticker.name, newPrice))
         })
       }
+      setInterval(this.updateTickers, 5000)
     },
 
     computed: {
+
       startIndex() {
         return (this.page - 1) * 4
       },
@@ -291,6 +296,12 @@
         // console.log(this.coins);
       },
 
+      updateTicker(tickerName, price) {
+        this.tickers
+            .filter(t => t.name === tickerName)
+            .forEach(t => {t.price = price})
+      },
+
       tagHandler() {
         // console.log(event.target.value)
         // this.coinsToShow.unshift(
@@ -316,32 +327,41 @@
         })
       },
 
-      subscribeToUpdates(tickerName) {
-        setInterval(async () => {
-          const f = await fetch(
-              `https://min-api.cryptocompare.com/data/price?fsym=${tickerName}&tsyms=USD&api_key=0a2ae2b928cc47a8536d9f2eb147f86d5d3163bb823e226897b40ae6fe5036a4`
-          ).catch(error => console.log(error))
+      formatPrice(price) {
+        if (price.constructor === String) {
+          return price
+        }
+        return price > 1
+            ? price.toFixed(2)
+            : price.toPrecision(2)
+      },
 
-          const data = await f.json()
-          this.tickers.find(t => t.name === tickerName).price =
-              data.USD > 1 ? data.USD.toFixed(2) : data.USD.toPrecision(2)
+      async updateTickers() {
+        // if (!this.tickers.length) {
+        //   return
+        // }
+        // // const tickerData = await loadTickers(this.tickers.map(t => t.name))
+        //
+        // this.tickers.forEach(ticker => {
+        //   const price = tickerData[ticker.name.toUpperCase()]
+        //
+        //   ticker.price = price ?? '~'
+        // })
 
-          if (this.selectedTicker?.name === tickerName) {
-            this.graph.push(data.USD)
-          }
-        }, 5000)
       },
 
       add() {
         if (!this.isTickerExist) {
-          const newTicker = {
+          const currentTicker = {
             name: this.ticker,
             price: '~'
           }
-          this.tickers = [...this.tickers, newTicker]
+          this.tickers = [...this.tickers, currentTicker]
+          this.ticker = ''
           this.filter = ''
 
-          this.subscribeToUpdates(newTicker.name)
+          subscribeToTicker(currentTicker.name, newPrice =>
+              this.updateTicker(currentTicker.name, newPrice))
 
           this.ticker = null
         }
@@ -361,6 +381,7 @@
         if (this.selectedTicker === ticker) {
           this.selectedTicker = null
         }
+        unsubscribeFromTicker(ticker.name)
       },
     },
 
