@@ -65,16 +65,41 @@
         </button>
       </section>
       <template v-if="tickers.length > 0">
+        <div>
+          <div class="flex items-center border-b border-teal-500 py-2">
+            <input
+                type="text"
+                v-model="filter"
+                @input="page = 1"
+                placeholder="Filter tickers"
+                class="appearance-none bg-transparent border-none w-full text-gray-700 mr-3 py-1 px-2 leading-tight focus:outline-none">
 
+          </div>
+          <div style="margin-top: 20px;">
+            <button
+                @click="page = page - 1"
+                :disabled="!(page > 1)"
+                class="mx-2 inline-flex items-center py-2 px-4 border border-transparent shadow-sm text-sm leading-4 font-medium rounded-full text-white bg-gray-600 hover:bg-gray-700 transition-colors duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
+
+            >Backward</button>
+            <button
+                @click="page = page + 1"
+                :disabled="!hasNextPage"
+                class="mx-2 inline-flex items-center py-2 px-4 border border-transparent shadow-sm text-sm leading-4 font-medium rounded-full text-white bg-gray-600 hover:bg-gray-700 transition-colors duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
+
+            >Forward</button>
+          </div>
+
+        </div>
         <hr class="w-full border-t border-gray-600 my-4" />
 
         <dl class="mt-5 grid grid-cols-1 gap-5 sm:grid-cols-3">
           <div
-              v-for="item in tickers"
+              v-for="item in paginatedTickers"
               :key="item.name"
-              @click="selectHandler(item)"
+              @click="selectedTicker = item"
               :class="{
-                'border-4': sel === item
+                'border-4': selectedTicker === item
               }"
               class="bg-white overflow-hidden shadow rounded-lg border-purple-800 border-solid cursor-pointer"
           >
@@ -107,20 +132,20 @@
           </div>
         </dl>
         <hr class="w-full border-t border-gray-600 my-4" />
-        <section v-if="sel" class="relative" >
+        <section v-if="selectedTicker" class="relative" >
           <h3 class="text-lg leading-6 font-medium text-gray-900 my-8">
-            {{ sel.name }} - USD
+            {{ selectedTicker.name }} - USD
           </h3>
           <div class="flex items-end border-gray-600 border-b border-l h-64">
             <div
-                v-for="(bar, idx) in normalizeGraph()"
+                v-for="(bar, idx) in normalizedGraph"
                 :key="idx"
                 :style="{ height: `${bar}%`}"
                 class="bg-purple-800 border w-10"
             ></div>
           </div>
           <button
-              @click="sel = null"
+              @click="selectedTicker = null"
               type="button"
               class="absolute top-0 right-0"
           >
@@ -155,22 +180,49 @@
 </template>
 
 <script>
+// [x] 6. Наличие в состоянии зависимых данных / 5+
+// [] 5. Обработка ошибок API / 5
+// [] 4. Запросы напрямую внутри компонента / 5
+// [] 2. При удалении остается подписка на загрузку тикера / 5
+// [] 3. Количество запросов / 4
+// [] 9. localStorage и анонимные вкладки / 3
+// [x] 1. Одинаковый код в Watch / 3
+// [] 8. График ужасно выглядит если будет много цен / 2
+// [] 10. Магические строки и числа(URL, задержки 5000 миллисек, ключ окал стораджа, количество на странице) / 1
+
+  // [x] График сломан, если везде одинаковые значения
+
   export default {
     name: 'App',
 
     data() {
       return {
         ticker: null,
+        filter: '',
+
         tickers: [],
-        sel: null,
+        selectedTicker: null,
+
         graph:[],
+
         coins: [],
         coinsToShow: [],
+
         isTickerExist: false,
+
+        page: 1,
       }
     },
     created() {
       this.coinsList()
+
+      const windowData = Object.fromEntries(new URL(window.location).searchParams.entries())
+      if (windowData.filter) {
+        this.filter = windowData.filter
+      }
+      if (windowData.page) {
+        this.page = windowData.page
+      }
 
       const tickersData = localStorage.getItem('cryptonomicon-list')
 
@@ -183,8 +235,45 @@
       }
     },
 
-    mounted() {
+    computed: {
+      startIndex() {
+        return (this.page - 1) * 4
+      },
+      endIndex() {
+        return this.page * 4
+      },
+      filteredTickers() {
+        return this.tickers.filter(ticker =>
+            ticker.name.includes(this.filter)
+        )
+      },
+      paginatedTickers() {
+        return this.filteredTickers.slice(this.startIndex,this.endIndex)
+      },
+      hasNextPage() {
+        return this.filteredTickers.length > this.endIndex
+      },
+      //----
+      normalizedGraph() {
+        const maxValue = Math.max(...this.graph)
+        const minValue = Math.min(...this.graph)
 
+        if (maxValue === minValue) {
+          return this.graph.map(() => 50)
+        }
+        return this.graph.map(
+            price => (
+                5 + (price - minValue) * 95 / (maxValue - minValue)
+            )
+        )
+      },
+      //----
+      pageStateOptions() {
+        return {
+          filter: this.filter,
+          page: this.page,
+        }
+      }
     },
 
     methods: {
@@ -199,7 +288,7 @@
             fullName: data.Data[i].FullName
           })
         }
-        console.log(this.coins);
+        // console.log(this.coins);
       },
 
       tagHandler() {
@@ -237,7 +326,7 @@
           this.tickers.find(t => t.name === tickerName).price =
               data.USD > 1 ? data.USD.toFixed(2) : data.USD.toPrecision(2)
 
-          if (this.sel?.name === tickerName) {
+          if (this.selectedTicker?.name === tickerName) {
             this.graph.push(data.USD)
           }
         }, 5000)
@@ -249,9 +338,8 @@
             name: this.ticker,
             price: '~'
           }
-          this.tickers.unshift(newTicker)
-
-          localStorage.setItem('cryptonomicon-list',JSON.stringify(this.tickers))
+          this.tickers = [...this.tickers, newTicker]
+          this.filter = ''
 
           this.subscribeToUpdates(newTicker.name)
 
@@ -270,24 +358,34 @@
       deleteTicker(ticker) {
         this.tickers = this.tickers.filter(t => t !== ticker)
         localStorage.setItem('cryptonomicon-list',JSON.stringify(this.tickers))
-        if (this.sel === ticker) {
-          this.sel = null
+        if (this.selectedTicker === ticker) {
+          this.selectedTicker = null
+        }
+      },
+    },
+
+    watch: {
+      paginatedTickers() {
+        if (this.paginatedTickers.length === 0 && this.page > 1) {
+          this.page -= 1
         }
       },
 
-      selectHandler(t) {
-        this.sel = t
+      filter() {
+        this.page = 1
+      },
+      pageStateOptions(value) {
+        window.history.pushState(
+            null,
+            document.title,
+            `${window.location.pathname}?filter=${value.filter}&page=${value.page}`
+        )
+      },
+      selectedTicker() {
         this.graph = []
       },
-
-      normalizeGraph() {
-        const maxValue = Math.max(...this.graph)
-        const minValue = Math.min(...this.graph)
-        return this.graph.map(
-            price => (
-                5 + (price - minValue) * 95 / (maxValue - minValue)
-            )
-        )
+      tickers() {
+        localStorage.setItem('cryptonomicon-list',JSON.stringify(this.tickers))
       }
     }
   }
