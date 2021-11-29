@@ -297,9 +297,15 @@ export default {
       },
 
       updateTicker(tickerName, price) {
+
         this.tickers
             .filter(t => t.name === tickerName)
-            .forEach(t => {t.price = price})
+            .forEach(t => {
+              if(t === this.selectedTicker) {
+                this.graph.push(price)
+              }
+              t.price = price
+            })
       },
 
       tagHandler() {
@@ -328,7 +334,7 @@ export default {
       },
 
       formatPrice(price) {
-        if (price.constructor === String) {
+        if ((price.constructor === String)){
           return price
         }
         return price > 1
@@ -340,7 +346,7 @@ export default {
         // if (!this.tickers.length) {
         //   return
         // }
-        // // const tickerData = await loadTickers(this.tickers.map(t => t.name))
+        // const tickerData = await loadTickers(this.tickers.map(t => t.name))
         //
         // this.tickers.forEach(ticker => {
         //   const price = tickerData[ticker.name.toUpperCase()]
